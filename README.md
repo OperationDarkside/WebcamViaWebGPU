@@ -6,14 +6,21 @@ The roundabout way via the video element is because I didn't know better. I'm a 
 
 You can use this code to test image/video manipulation shaders.
 
-How to use it:
+## How to use it:
 
 1. Open the [main.html](main.html) in a WebGPU-capable browser (Chrome 113 at the time of writing)
 2. Allow access to a video source of yours (might take a few seconds)
 3. Press the "Start" button
 4. You should see your video feed in the video element on top and the WebGPU rendered version below the buttons
 
-Sidenotes for beginners:
+## Examples
+
+1. Only Show motion
+  Computes a diff between the previous and current video frame and only displays pixels from the current frame, if they differ from the pixel at the same position in the previous frame.
+  This one requires a chrome developer feature flag to be enabled. Look at the console for its name, when the code throws.
+  !!! With a noisy video feed, e.g. cheap sensor and low light conditions, the diff can look almost identical to the raw feed.
+
+### Sidenotes for beginners:
 
 - The WebGPU rendering can only start, when the video element has a valid source. Otherwise the following code will throw:
 ```javascript
