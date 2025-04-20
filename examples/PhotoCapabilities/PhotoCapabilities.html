@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Camera Capabilities</title>
+    <script>
+        const width = 320; // We will scale the photo width to this
+        let height = 0; // This will be computed based on the input stream
+
+        let streaming = false;
+
+        let video = null;
+        let photo = null;
+        let startbutton = null;
+        let applyConstraintsButton = null;
+
+        let cameras = [];
+        let selectedCamera = null;
+        let cameraSelector = null;
+
+        function start() {
+            cameraSelector = document.getElementById("camera-select");
+            cameraSelector.onchange = (ev) => {
+                const cameraGUID = ev.srcElement.value;
+                const selected = cameras.find(camera => camera.id === cameraGUID);
+                if (selected !== undefined) {
+                    selectedCamera = selected;
+                }
+            };
+
+            video = document.getElementById("video");
+            photo = document.getElementById("photo");
+            startbutton = document.getElementById("startbutton");
+            applyConstraintsButton = document.getElementById("applyConstraints");
+
+            loadCameras();
+            displayCameraCapabilities();
+            startup();
+        }
+
+        function loadCameras() {
+            navigator.mediaDevices.enumerateDevices().then((devices) => {
+                devices.forEach((device) => {
+                    if (device.kind === "videoinput") {
+                        const capa = device.getCapabilities();
+                        const deviceJson = JSON.stringify(capa, null, 2);// JSON.stringify(device, null, 2);
+                        const outputElement = document.getElementById('camera-output');
+                        outputElement.innerHTML += `Device ${device.kind}: ${device.label} id = ${device.deviceId}:<br><pre>${deviceJson}</pre><br><br>`;
+
+                        navigator.mediaDevices.getUserMedia({ video: { deviceId: device.deviceId } })
+                            .then(mediastream => {
+                                cameras.push(...mediastream.getTracks());
+
+                                if (cameras.length > 0) {
+                                    cameras.forEach(camera => {
+                                        const lbl = camera.label;
+                                        const id = camera.id;
+                                        let opt = new Option(lbl, id);
+                                        cameraSelector.add(opt);
+                                    });
+                                }
+                            });
+                    }
+                });
+            })
+                .catch((err) => {
+                    console.error(`${err.name}: ${err.message}`);
+                });
+
+
+        }
+
+        function displayCameraCapabilities() {
+            // Access the image capture API
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(mediastream => {
+                    return mediastream.getTracks()[0];
+                })
+                .then(track => {
+                    const outputElement = document.getElementById('camera-output');
+
+                    if (outputElement) {
+                        // Print the results to an HTML element as JSON
+                        outputElement.innerHTML += `Camera Capabilities:<br>`;
+                        const capabilitiesJson = JSON.stringify(track.getCapabilities(), null, 2);
+                        outputElement.innerHTML += `<pre>${capabilitiesJson}</pre><br><br>`;
+
+                        const constraintsJson = JSON.stringify(track.getConstraints(), null, 2);
+                        outputElement.innerHTML += `Camera Constraints:<br>`;
+                        outputElement.innerHTML += `<pre>${constraintsJson}</pre><br><br>`;
+
+                        // Extract ISO and ExposureTime values
+                        const isoValue = extractIso(track.getCapabilities());
+                        const exposureTimeValue = extractExposureTime(track.getCapabilities());
+
+                        // Generate dropdowns for ISO and ExposureTime fields
+                        if (exposureTimeValue) {
+                            generateDropdown('iso', isoValue);
+                        }
+                        if (exposureTimeValue) {
+                            generateDropdown('exposureTime', exposureTimeValue);
+                        }
+                    }
+                })
+                .catch(error => {
+                    const outputElement = document.getElementById('errors');
+                    outputElement.innerHTML = error;
+                });
+        }
+
+        function extractIso(capabilities) {
+            return capabilities["iso"];
+        }
+
+        function extractExposureTime(capabilities) {
+            return capabilities["exposureTime"];
+        }
+
+        function generateDropdown(fieldName, fieldValue) {
+            const dropdown = document.getElementById(fieldName);
+            try {
+                //alert("We are in " + fieldName + " value: " + JSON.stringify(fieldValue, null, 2));
+                if (fieldValue && Array.isArray(fieldValue)) {
+                    fieldValue.forEach((value, index) => {
+                        const option = new Option(`Step ${index + 1}: ${value}`);
+                        dropdown.add(option);
+                    });
+                } else if (fieldValue && fieldValue.hasOwnProperty("min") && fieldValue.hasOwnProperty("max") && fieldValue.hasOwnProperty("step")) {
+                    const isoMin = parseInt(fieldValue["min"]);
+                    const isoMax = parseInt(fieldValue["max"]);
+                    let step = parseInt(fieldValue["step"]);
+                    if (step === 0 || step < 0) {
+                        step = 10;
+                    }
+
+                    for (let i = isoMin; i <= isoMax; i += step) {
+                        const option = new Option(`${i}`, i);
+                        dropdown.add(option);
+                    }
+                }
+            } catch (e) {
+                const outputElement = document.getElementById('errors');
+                outputElement.innerHTML = "generateDropdown error: " + error;
+            }
+        }
+
+        function showViewLiveResultButton() {
+            if (window.self !== window.top) {
+                // Ensure that if our document is in a frame, we get the user
+                // to first open it in its own tab or window. Otherwise, it
+                // won't be able to request permission for camera access.
+                document.querySelector(".contentarea").remove();
+                const button = document.createElement("button");
+                button.textContent = "View live result of the example code above";
+                document.body.append(button);
+                button.addEventListener("click", () => window.open(location.href));
+                return true;
+            }
+            return false;
+        }
+
+        function startup() {
+            if (showViewLiveResultButton()) {
+                return;
+            }
+
+
+            navigator.mediaDevices
+                .getUserMedia({ video: true, audio: false })
+                .then((stream) => {
+                    video.srcObject = stream;
+                    video.play();
+                })
+                .catch((err) => {
+                    console.error(`An error occurred: ${err}`);
+                });
+
+            video.addEventListener(
+                "canplay",
+                (ev) => {
+                    if (!streaming) {
+                        height = video.videoHeight / (video.videoWidth / width);
+
+                        // Firefox currently has a bug where the height can't be read from
+                        // the video, so we will make assumptions if this happens.
+
+                        if (isNaN(height)) {
+                            height = width / (4 / 3);
+                        }
+
+                        video.setAttribute("width", width);
+                        video.setAttribute("height", height);
+                        streaming = true;
+                    }
+                },
+                false,
+            );
+
+            startbutton.addEventListener(
+                "click",
+                (ev) => {
+                    takepicture();
+                    ev.preventDefault();
+                },
+                false,
+            );
+
+            applyConstraintsButton.addEventListener(
+                "click",
+                (ev) => {
+                    navigator.mediaDevices.getUserMedia({ video: true })
+                        .then(mediastream => {
+                            return mediastream.getTracks()[0];
+                        })
+                        .then(track => {
+                            let advanced = [];
+                            const capabilities = track.getCapabilities();
+
+                            if (capabilities.exposureTime) {
+
+                                const exposureTimeElement = document.getElementById("exposureTime");
+                                const exposureTimeValue = exposureTimeElement.value;
+                                if (exposureTimeValue) {
+                                    advanced.push({ exposureTime: exposureTimeValue, exposureMode: "manual" });
+                                }
+                            }
+
+                            if (capabilities.iso) {
+                                const IsoElement = document.getElementById("iso");
+                                const IsoValue = IsoElement.value;
+                                if (IsoValue) {
+                                    advanced.push({ iso: IsoValue });
+                                }
+                            }
+
+                            track.applyConstraints({ advanced: advanced })
+                                .then(() => {
+                                    const constraintsJson = JSON.stringify(track.getConstraints(), null, 2);
+                                    const outputElement = document.getElementById('camera-output');
+                                    outputElement.innerHTML += `Camera Constraints:<br>` + `<pre>${constraintsJson}</pre><br><br>`;
+                                })
+                                .catch((e) => {
+                                    const outputElement = document.getElementById('errors');
+                                    outputElement.innerHTML = "applyConstraints error: " + e;
+                                });
+                        });
+                    ev.preventDefault();
+                },
+                false,
+            );
+
+            //clearphoto();
+        }
+
+        function takepicture() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(mediastream => {
+                    return mediastream.getTracks()[0];
+                })
+                .then(track => {
+                    const constraintsJson = JSON.stringify(track.getConstraints(), null, 2);
+                    const outputElement = document.getElementById('camera-output');
+                    outputElement.innerHTML = `Camera Constraints:<br>` + `<pre>${constraintsJson}</pre><br><br>`;
+
+                    let imageCapture = new ImageCapture(track);
+                    imageCapture.takePhoto().then((blob) => {
+                        console.log("Took photo:", blob);
+                        photo.classList.remove("hidden");
+                        photo.src = URL.createObjectURL(blob);
+                    }).catch((error) => {
+                        const outputElement = document.getElementById('errors');
+                        outputElement.innerHTML = "takePhoto() error: " + error;
+                    });
+                })
+                .catch(error => {
+                    const outputElement = document.getElementById('errors');
+                    outputElement.innerHTML = "Take Picture Error: " + error;
+                });
+        }
+
+        //window.addEventListener("load", startup, false);
+    </script>
+</head>
+
+<body>
+    <h1>Camera Capabilities and Constraints</h1>
+    <label>
+        <select id="camera-select">
+            <option value="" disabled selected>Select your option</option>
+        </select>
+    </label>
+    <div class="camera">
+        <video id="video">Video stream not available.</video>
+        <button id="startbutton">Take photo</button>
+    </div>
+    <canvas id="canvas"> </canvas>
+    <div class="output">
+        <img id="photo" alt="The screen capture will appear in this box." />
+    </div>
+    <select id="iso"></select>
+    <select id="exposureTime"></select>
+    <button id="applyConstraints">Apply Constraints</button>
+    <div id="camera-output">Loading camera capabilities...</div>
+    <div id="errors">No Errors</div>
+
+    <script>
+        // Call the function when the page loads
+        document.addEventListener('DOMContentLoaded', start);
+    </script>
+</body>
+
+</html>

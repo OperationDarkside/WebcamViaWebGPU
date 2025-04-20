@@ -1,6 +1,13 @@
 //var streamRunning = false;
 var cubeTexture;
-var video;
+let video;
+let imageCapture;
+
+const constraints = {
+  width: { min: 640, ideal: 1280 },
+  height: { min: 480, ideal: 720 },
+  iso : 50
+};
 
 function start() {
     video = document.querySelector("#videoElement");
@@ -8,24 +15,39 @@ function start() {
 
     if (navigator.mediaDevices.getUserMedia) {
         navigator.mediaDevices.getUserMedia({ video: true })
-        .then(function (stream) {
+        .then(async function (stream) {
+            //console.log(new VideoFrame(stream.getTracks()[0]).format);
             video.srcObject = stream;
+
+            const track = stream.getVideoTracks()[0];
+            await track.applyConstraints(constraints);
+            imageCapture = new ImageCapture(track);
+
+
+            const photoCapa = await imageCapture.getPhotoCapabilities();
+            console.log(JSON.stringify(photoCapa));
+            //console.log(track.getSupportedConstraints());
+            //console.log("--------------")
+            const constr = await track.getConstraints();
+            console.log(JSON.stringify(constr));
+            const capa = track.getCapabilities();
+            console.log(JSON.stringify(capa));
             
             btnStart.disabled = false;
-        })
-        .catch(function (err0r) {
-        console.log("Something went wrong!" + err0r);
+
+            return imageCapture.getPhotoCapabilities();
+        }).then((photoCapabilities) => {
+          const capa = imageCapture.track.getCapabilities();
+          console.log(capa);
+        }).catch(function (err0r) {
+          console.log("Something went wrong!" + err0r);
         });
     }
 }
 
-async function onBtnStartClick(btn) {
+function onBtnStartClick(btn) {
     let video = document.querySelector("#videoElement");
-    await video.play();
-
-    const canvas = document.querySelector('#gpuCanvas');
-    canvas.width = video.videoWidth * 2;
-    canvas.height = video.videoHeight * 2;
+    video.play();
 
     btn.disabled = true;
 
@@ -61,34 +83,12 @@ const vertices = new Float32Array([
 */
 
 const verticeeeees = new Float32Array([
-    // Red
-    -1.0,  1.0, 0, 0, 0, 0,
-   -1.0, 0, 0, 0, 1.0, 0,
-    0, 1.0, 0, 1.0, 0, 0,
-    0, 1.0, 0, 1.0, 0, 0,
-    -1.0, 0, 0, 0, 1.0, 0,
-    0, 0, 0, 1.0, 1.0, 0,
-    // Green
-    0, 1.0, 0, 0, 0, 1,
-    0, 0, 0, 0, 1.0, 1,
-    1.0, 1.0, 0, 1.0, 0, 1,
-    1.0, 1.0, 0, 1.0, 0, 1,
-    0, 0, 0, 0, 1.0, 1,
-    1.0, 0, 0, 1.0, 1.0, 1,
-    // Blue
-    -1.0, 0, 0, 0, 0, 2,
-    -1.0, -1.0, 0, 0, 1.0, 2,
-    0, 0, 0, 1.0, 0, 2,
-    0, 0, 0, 1.0, 0, 2,
-    -1.0, -1.0, 0, 0, 1.0, 2,
-    0, -1.0, 0, 1.0, 1.0, 2,
-    // Lumi
-    0, 0, 0, 0, 0, 3,
-    0, -1.0, 0, 0, 1.0, 3,
-    1.0, 0, 0, 1.0, 0, 3,
-    1.0, 0, 0, 1.0, 0, 3,
-    0, -1.0, 0, 0, 1.0, 3,
-    1.0, -1.0, 0, 1.0, 1.0, 3
+    -1.0,  1.0, 0, 1, 1, 0, 0, 1, 0, 0,
+   -1.0, -1.0, 0, 1, 0, 1, 0, 1, 0, 1.0,
+    1.0, 1.0, 0, 1, 0, 0, 1, 1, 1.0, 0,
+    1.0, 1.0, 0, 1, 0, 0, 1, 1, 1.0, 0,
+    -1.0, -1.0, 0, 1, 0, 1, 0, 1, 0, 1.0,
+    1.0, -1.0, 0, 1, 1, 0.5, 0.75, 1.0, 1.0, 1.0
 ]);
 
 // Vertex and fragment shaders
@@ -100,59 +100,36 @@ const shaders = `
 
 struct VertexOut {
   @builtin(position) position : vec4f,
-  @location(0) fragUV : vec2f,
-  @location(1) index : f32,
-  @location(2) fragPosition: vec4<f32>,
+  @location(0) color : vec4f,
+  @location(1) fragUV : vec2f,
 }
 
 @vertex
-fn vertex_main(@location(0) position: vec3f,
-               @location(1) uv : vec2f,
-               @location(2) ind : f32) -> VertexOut
+fn vertex_main(@location(0) position: vec4f,
+               @location(1) color: vec4f,
+               @location(2) uv : vec2f) -> VertexOut
 {
   var output : VertexOut;
-  output.position = vec4f(position, 1.0);
+  output.position = position;
+  output.color = color;
   output.fragUV = uv;
-  output.index = ind;
-  output.fragPosition = 0.5 * (output.position + vec4(1.0, 1.0, 1.0, 1.0));
   return output;
 }
 
 @fragment
 fn fragment_main(fragData: VertexOut) -> @location(0) vec4f
 {
-    let prevColor = textureSampleBaseClampToEdge(prevTexture, mySampler, fragData.fragUV); // * fragData.fragPosition;
-    let currColor = textureSampleBaseClampToEdge(currTexture, mySampler, fragData.fragUV); // * fragData.fragPosition;
-    var outColor: vec4f;
-    //if(any(prevColor != currColor)){
+    let prevColor = textureSampleBaseClampToEdge(prevTexture, mySampler, fragData.fragUV);
+    let currColor = textureSampleBaseClampToEdge(currTexture, mySampler, fragData.fragUV);
+    var outColor = vec4f(0.0, 0.0, 0.0, 1.0);
+    if(any(prevColor != currColor)){
     //if((prevColor[0] == currColor[0]) && (prevColor[1] == currColor[1]) && (prevColor[2] == currColor[2])){
       // outColor = vec4f(1.0, 1.0, 1.0, 1.0);
-      //outColor = currColor;
-    //}
-    // return outColor;
-
-    let ind = i32(fragData.index);
-    switch ind {
-      case 0, {
-        outColor = vec4f(currColor[0], 0, 0, 1.0);
-      }
-      case 1, {
-        outColor = vec4f(0, currColor[1], 0, 1.0);
-      }
-      case 2, {
-        outColor = vec4f(0, 0, currColor[2], 1.0);
-      }
-      case 3, {
-        var gs = dot(currColor.xyz, vec3f(0.21, 0.71, 0.07));
-        outColor = vec4f(vec3f(gs), 1.0);
-      }
-      default {
-        outColor = vec4f(1.0, 1.0, 0.0, 1.0);
-      }
+      outColor = currColor;
     }
-
     return outColor;
-
+    //return textureSampleBaseClampToEdge(myTexture, mySampler, fragData.fragUV);
+    //return fragData.color;
 }
 `;
 
@@ -200,17 +177,17 @@ async function init() {
     attributes: [{
       shaderLocation: 0, // position
       offset: 0,
-      format: 'float32x3'
+      format: 'float32x4'
     }, {
-        shaderLocation: 1, // uv
-        offset: 12,
+      shaderLocation: 1, // color
+      offset: 16,
+      format: 'float32x4'
+    }, {
+        shaderLocation: 2, // uv
+        offset: 32,
         format: 'float32x2'
-    }, {
-      shaderLocation: 2, // index
-      offset: 20,
-      format: 'float32'
     }],
-    arrayStride: 24,
+    arrayStride: 40,
     stepMode: 'vertex'
   }];
 
@@ -257,7 +234,7 @@ async function init() {
     prevVideoFrame = currVideoFrame;
     currVideoFrame = new VideoFrame(video);
 
-    let uBindGroupDesc = {
+    const uniformBindGroup = device.createBindGroup({
       layout: renderPipeline.getBindGroupLayout(0),
       entries: [
         {
@@ -277,9 +254,7 @@ async function init() {
           }),
         }
       ],
-    };
-
-    const uniformBindGroup = device.createBindGroup(uBindGroupDesc);
+    });
 
     // 7: Create GPUCommandEncoder to issue commands to the GPU
   // Note: render pass descriptor, command encoder, etc. are destroyed after use, fresh one needed for each frame.
@@ -303,7 +278,7 @@ async function init() {
     passEncoder.setPipeline(renderPipeline);
     passEncoder.setBindGroup(0, uniformBindGroup);
     passEncoder.setVertexBuffer(0, vertexBuffer);
-    passEncoder.draw(24, 1, 0, 0);
+    passEncoder.draw(6, 1, 0, 0);
     passEncoder.end();
     // 10: End frame by passing array of command buffers to command queue for execution
     device.queue.submit([commandEncoder.finish()]);
