@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=600">
+<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+<title>WebGPU Webcam Test</title>
+<style>
+body {
+    font-family: system-ui;
+    color: #f7f7ff;
+    background-color: rgb(38, 38, 127);
+    text-align: center;
+}
+canvas {
+    margin: 0 auto;
+}
+#btnStart {
+    
+}
+</style>
+</head>
+<body onload="start();">
+<div id="contents">
+    <video id="videoElement"></video><br>
+    <button id="btnStart" disabled onclick="onBtnStartClick(this)">Start</button><br>
+    <button id="btnStop" disabled onclick="onBtnStopClick(this)">Stop</button><br>
+    <canvas id="gpuCanvas" width="640px" height="480px"></canvas>
+</div>
+<script src="webgpuwebcamtest.js"></script>
+</body>
+</html>
