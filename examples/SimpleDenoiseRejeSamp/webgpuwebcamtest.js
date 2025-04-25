@@ -273,11 +273,35 @@ fn vertex_main(@location(0) position: vec4f,
   return output;
 }
 
+fn reject_color_component(prev: f32, curr: f32, next: f32) -> f32 {
+  if(curr == next && curr != prev) {
+    return curr;
+  } else {
+    return prev;
+  }
+}
+
+fn reject_color(prev: vec3f, curr: vec3f, next: vec3f) -> vec3f {
+  return vec3f(
+    reject_color_component(prev.r, curr.r, next.r),
+    reject_color_component(prev.g, curr.g, next.g),
+    reject_color_component(prev.b, curr.b, next.b)
+  );
+}
+
+fn reject_color2(prev: vec3f, curr: vec3f, next: vec3f) -> vec3f {
+  if(all(curr == next) && all(curr != prev)) {
+    return curr;
+  } else {
+    return prev;
+  }
+}
+
 @fragment
 fn fragment_main(fragData: VertexOut) -> @location(0) vec4f
 {
   // Threshold for outlier rejection (tune this parameter)
-  const OUTLIER_THRESHOLD = 0.15; // Adjust based on noise level
+  //const OUTLIER_THRESHOLD = 0.15; // Adjust based on noise level
   let sampleUV = fragData.fragUV;
 
   // --- Temporal Averaging ---
@@ -287,6 +311,7 @@ fn fragment_main(fragData: VertexOut) -> @location(0) vec4f
   let currColor = textureSampleBaseClampToEdge(currTexture, mySampler, sampleUV).rgb;
   let nextColor = textureSampleBaseClampToEdge(nextTexture, mySampler, sampleUV).rgb;
 
+  /*
   let meanColor = (prevColor + currColor + nextColor) / 3.0;
 
   var samples = array<vec3f, 3>();
@@ -319,6 +344,8 @@ fn fragment_main(fragData: VertexOut) -> @location(0) vec4f
 
   // Return the averaged color, ensuring alpha is 1.0
   return vec4f(finalColor, 1.0);
+  */
+  return vec4f(reject_color2(prevColor, currColor, nextColor), 1.0);
 }
 `;
 
